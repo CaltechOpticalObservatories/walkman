@@ -18,6 +18,9 @@ dependencies = [
     "notebook",
     "ipywidgets",
     "ipympl",
+    "jupyter_server",
+    "typer",
+    "voila>=0.5",
 ]
 
 [project.scripts]

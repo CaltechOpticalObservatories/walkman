@@ -17,7 +17,7 @@ import tempfile
 from jupyter_server.serverapp import list_running_servers, shutdown_server
 import typer
 
-from walkman.instruments import CONFIG_ENV_VAR, INSTRUMENT_ENV_VAR, load_instrument, resolve_config
+from walkman.instruments import CONFIG_ENV_VAR, INSTRUMENT_ENV_VAR, OUTPUT_ENV_VAR, load_instrument, resolve_config
 
 # Session directories are created in the system temp dir as f"{SESSION_PREFIX}{instrument}_<random>"
 SESSION_PREFIX = "walkman_"
@@ -41,6 +41,11 @@ def start(
     config: Optional[str] = typer.Option(
         None, "--config", "-c",
         help="Name of the detector YAML config, should be present in the instrument package.",
+    ),
+    output: Optional[Path] = typer.Option(
+        None, "--output", "-o",
+        help="Default folder for analysis results, editable in the dashboard. "
+             "Defaults to ~/walkman_results/<instrument>.",
     ),
 ):
     """
@@ -68,9 +73,15 @@ def start(
         shutil.copyfileobj(src, dst)
     typer.secho(f"Session directory: {session_dir}", fg=typer.colors.GREEN)
 
-    # Launch Jupyter from the session directory, the kernel inherits the env vars from the server
-    env = {**os.environ, INSTRUMENT_ENV_VAR: instrument, CONFIG_ENV_VAR: str(config_path)}
-    result = subprocess.run([sys.executable, "-m", "notebook", notebook], cwd=session_dir, env=env)
+    # Launch Jupyter from the session directory, the kernel inherits the env vars from the server.
+    # The browser opens the Voila render of the notebook, which runs all cells on load and hides their code.
+    output = (output or Path("~/walkman_results") / instrument).expanduser().resolve()
+    env = {**os.environ, INSTRUMENT_ENV_VAR: instrument, CONFIG_ENV_VAR: str(config_path), OUTPUT_ENV_VAR: str(output)}
+    cmd = [sys.executable, "-m", "jupyter_server",
+           f"--ServerApp.default_url=/voila/render/{notebook}",
+           "--ServerApp.open_browser=True",
+           "--VoilaConfiguration.show_tracebacks=True"]
+    result = subprocess.run(cmd, cwd=session_dir, env=env)
     raise typer.Exit(result.returncode)
 
 

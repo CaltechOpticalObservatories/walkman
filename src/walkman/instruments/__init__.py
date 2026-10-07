@@ -1,19 +1,25 @@
 """
-Instrument packages. Each subpackage holds detector YAML configs and may define:
+Instrument packages. Each subpackage holds detector YAML configs and must define:
+
+- `TIMESTAMP_HDRKEY`: header keyword holding the exposure time.
+- `TIMESTAMP_FORMAT`: astropy.time.Time format of that value, e.g. 'mjd' or 'isot'.
+
+It may also define:
 
 - `DEFAULT_CONFIG`: name of the default detector YAML config.
 - `load_image`: custom file loader for ImageCreator.
 - `identify_image`: custom image-type identifier for ImageCreator.
+
+The ImageCreator itself is built in `walkman.backend`.
 """
 from pathlib import Path
 from types import ModuleType
 from typing import Optional
 import importlib
 
-from eregion.tasks.imagegen import ImageCreator
-
 INSTRUMENT_ENV_VAR = "WALKMAN_INSTRUMENT"
 CONFIG_ENV_VAR = "WALKMAN_CONFIG"
+OUTPUT_ENV_VAR = "WALKMAN_OUTPUT"
 
 
 def load_instrument(instrument: str) -> ModuleType:
@@ -42,22 +48,3 @@ def resolve_config(instrument_module: ModuleType, config: Optional[str] = None) 
     if not config_path.exists():
         raise ValueError(f"Detector config not found at '{config_path}'.")
     return config_path
-
-
-def build_image_creator(instrument_module: ModuleType, config_path: str | Path, **kwargs) -> ImageCreator:
-    """
-    Instantiate an ImageCreator with the instrument's custom file loader and identifier, if defined.
-
-    :param instrument_module: Imported instrument module.
-    :param config_path: Path to the detector config.
-    :param kwargs: Extra keyword arguments for ImageCreator.
-    :return: Configured ImageCreator.
-    """
-    creator = ImageCreator(detector_config=str(config_path), **kwargs)
-    custom_loader = getattr(instrument_module, "load_image", None)
-    custom_identifier = getattr(instrument_module, "identify_image", None)
-    if custom_loader:
-        creator.set_fileloader(custom_loader)
-    if custom_identifier:
-        creator.set_identifier(custom_identifier)
-    return creator

@@ -1,7 +1,11 @@
 import os
+from functools import reduce
+from pathlib import Path
 import numpy as np
 import pandas as pd
 from typing import Literal, Optional, Callable
+from astropy.io import fits
+from astropy.time import Time
 from pydantic import Field, ConfigDict, field_validator
 
 from eregion.tasks import Task, TaskResult
@@ -10,6 +14,21 @@ from eregion.utils import save_dataframe_to_fits, load_dataframe_from_fits
 from eregion.core.image_stats import do_statistics, STATFUNCS
 from eregion.core.welch2d import raveled_welch
 from eregion.core.entropy import entropy_optimal_histogram
+
+NOISE_FILENAME = "noise_results.fits"
+# Tuple-valued NoiseResult columns, saved as two variable-length array columns each
+ARRAY_COLUMNS = {"histogram": ("histogram_edges", "histogram_counts"), "psd": ("psd_freqs", "psd_values")}
+
+
+def _vla_column(name: str, arrays: list) -> fits.Column:
+    arrays = [np.asarray(a) for a in arrays]
+    code = "K" if all(a.dtype.kind in "iu" for a in arrays) else "D"
+    # filled one by one, so numpy does not stack equal-length arrays into a 2D array
+    column = np.empty(len(arrays), dtype=object)
+    for i, a in enumerate(arrays):
+        column[i] = a.astype(np.int64 if code == "K" else np.float64)
+    return fits.Column(name=name, format=f"P{code}()", array=column)
+
 
 class AtomicNoiseResult(TaskResult):
     det_id: str = Field(..., description="Detector ID or identifier for the DetImage.")
@@ -34,24 +53,52 @@ class NoiseResult(TaskResult):
     @field_validator("data", mode="before")
     def validate_data(cls, v):
         if isinstance(v, list) and all(isinstance(item, AtomicNoiseResult) for item in v):
-            # Convert list of AtomicNoiseResult to DataFrame
-            return pd.DataFrame([item.model_dump() for item in v])
+            # Convert list of AtomicNoiseResult to DataFrame, without the TaskResult metadata (params, upstream, ...)
+            exclude = set(AtomicNoiseResult.metadata_field_names())
+            return pd.DataFrame([item.model_dump(exclude=exclude) for item in v])
         elif isinstance(v, pd.DataFrame):
             return v
         else:
             raise ValueError("data must be a list of AtomicNoiseResult or a pandas DataFrame.")
 
     def save(self, filepath: str) -> None:
-        """ Save the NoiseResult to a FITS file. """
-        save_dataframe_to_fits(self.data, os.path.join(filepath, 'noise_results.fits'))
+        """
+        Save the NoiseResult to a FITS file. Scalar columns go to HDU 1, the (x, y) array pairs of ARRAY_COLUMNS go
+        to HDU 2 as variable-length array columns, since their lengths differ between rows.
+        """
         super().save(filepath)
+        fitspath = os.path.join(filepath, NOISE_FILENAME)
+        save_dataframe_to_fits(self.data.drop(columns=list(ARRAY_COLUMNS), errors="ignore"), fitspath)
+        array_cols = [_vla_column(name, [pair[i] for pair in self.data[col]])
+                      for col, names in ARRAY_COLUMNS.items() if col in self.data
+                      for i, name in enumerate(names)]
+        if array_cols:
+            with fits.open(fitspath, mode="append") as hdul:
+                hdul.append(fits.BinTableHDU.from_columns(array_cols, name="ARRAYS"))
 
     @classmethod
     def load(cls, filepath: str) -> "NoiseResult":
-        """ Load the NoiseResult from a FITS file. """
-        data = load_dataframe_from_fits(os.path.join(filepath, 'noise_results.fits'))
+        """ Load the NoiseResult from a FITS file written by save. """
+        fitspath = os.path.join(filepath, NOISE_FILENAME)
+        data = load_dataframe_from_fits(fitspath)
+        with fits.open(fitspath, memmap=False) as hdul:
+            arrays = hdul["ARRAYS"].data if "ARRAYS" in hdul else None
+            if arrays is not None:
+                for col, (x_name, y_name) in ARRAY_COLUMNS.items():
+                    data[col] = pd.Series([(np.array(x), np.array(y)) for x, y in zip(arrays[x_name], arrays[y_name])],
+                                          index=data.index, dtype=object)
         metadata = cls.load_metadata(filepath)
         return cls(data=data, **metadata)
+
+    @classmethod
+    def load_run(cls, run_dir: str | Path) -> "NoiseResult":
+        """
+        Load and combine the per-image NoiseResults saved in the subfolders of a run folder, in subfolder name order.
+        """
+        image_dirs = sorted(p for p in Path(run_dir).iterdir() if (p / NOISE_FILENAME).is_file())
+        if not image_dirs:
+            raise FileNotFoundError(f"No saved NoiseResults found in '{run_dir}'.")
+        return reduce(lambda a, b: a.combine(b), (cls.load(str(d)) for d in image_dirs))
 
 
 class NoisePSD(Task):
@@ -63,7 +110,6 @@ class NoisePSD(Task):
     def __init__(self,
                  name: Optional[str] = None,
                  **kwargs):
-        kwargs["timestamp_key"] = kwargs.get("timestamp_key", "MJD-OBS")
         super().__init__(name=name, **kwargs)
 
     def run(self,
@@ -109,7 +155,12 @@ class NoisePSD(Task):
                                "psd": (f, psd)}
                     resdict.update(region_stats)
                     resdict["filename"] = img.meta.get("filename", None)
-                    resdict["time"] = img.meta.get(self.meta["timestamp_key"], None)
+                    timestamp = img.meta.get(self.meta.get("timestamp_key", "MJD-OBS"), None)
+                    if timestamp:
+                        timestamp = Time(timestamp, format=self.meta.get("timestamp_format", "mjd")).mjd
+                    elif img.meta.get("filename", None):
+                        timestamp = Time(os.path.getctime(img.meta["filename"]), format="unix", scale="utc").mjd
+                    resdict["time"] = timestamp
                     atomic_noise_results.append(AtomicNoiseResult(**resdict))
 
         return self.task_result(data=atomic_noise_results)
