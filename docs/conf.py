@@ -60,6 +60,8 @@ autodoc_default_options = {
     "members": True,
     "undoc-members": True,
     "show-inheritance": True,
+    # pydantic internals of the result models
+    "exclude-members": "model_config, validate_data",
 }
 autodoc_typehints = "description"
 napoleon_google_docstring = True

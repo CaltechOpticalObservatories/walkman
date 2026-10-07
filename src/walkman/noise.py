@@ -105,6 +105,7 @@ class NoisePSD(Task):
     """
     Task to compute the power spectral density (PSD) of an image to analyze its noise characteristics.
     """
+    #: Result type returned by `run`.
     task_result = NoiseResult
 
     def __init__(self,

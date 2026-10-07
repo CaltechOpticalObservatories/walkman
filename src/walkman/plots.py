@@ -109,6 +109,7 @@ class _SeriesPlot(_Figure):
     """
     Base class for a single-axes figure with one Line2D per series key, which can be shown or hidden.
     """
+    #: Whether rescaling also autoscales the x axis. Subclasses with a fixed x range set this to False.
     scalex = True
 
     def __init__(self, figsize: tuple[float, float], xlabel: str, ylabel: str):
@@ -153,6 +154,7 @@ class PSDPlot(_SeriesPlot):
     """
     One-sided PSDs of several series on a log scale against frequency, over 0 to 0.5 cycles/pixel.
     """
+    #: The x axis keeps its fixed 0 to 0.5 cycles/pixel range when rescaling.
     scalex = False
 
     def __init__(self, figsize: tuple[float, float] = (6, 3.6)):

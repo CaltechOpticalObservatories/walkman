@@ -1,7 +1,15 @@
 # API Reference
 
-Auto-generated reference for the `walkman` package, organized by subpackage.
+Auto-generated reference for the `walkman` package, organized by module.
 
 ```{eval-rst}
+.. autosummary::
+   :toctree: generated
+   :recursive:
 
+   walkman.backend
+   walkman.noise
+   walkman.plots
+   walkman.instruments
+   walkman.cli
 ```
