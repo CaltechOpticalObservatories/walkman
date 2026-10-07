@@ -1,0 +1,56 @@
+# toml
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "walkman"
+version = "0.1.0"
+description = "Detector noise identification and analysis toolkit."
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+authors = [{ name = "Yashvi-Sharma", email = "yssharma@caltech.edu" },
+	   { name = "Dan Weatherill", email = "dweather@caltech.edu" }]
+license = { text = "MIT" }
+
+dependencies = [
+    "eregion @ git+https://github.com/CaltechOpticalObservatories/eregion.git@kpf-config",
+    "notebook",
+    "ipywidgets",
+    "ipympl",
+]
+
+[project.scripts]
+walkman = "walkman.cli.main:main"
+
+[project.optional-dependencies]
+dev = [
+    "black>=24.0",
+    "ipykernel>=6.28",
+    "flake8",
+    "tox>=4.0",
+]
+test = [
+    "pytest>=7.0",
+]
+docs = [
+    "sphinx>=8.0",
+    "shibuya>=2024.8",
+    "myst-parser>=4.0",
+    "sphinx-copybutton>=0.5",
+    "sphinx-design>=0.6",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-data]
+walkman = ["notebooks/*.ipynb", "instruments/*/*.yaml"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["walkman*"]
+
+[tool.hatch.envs.default]
+python = "3.12"
+features = ["dev", "test"]
