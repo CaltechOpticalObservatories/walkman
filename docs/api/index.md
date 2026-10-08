@@ -8,7 +8,6 @@ Auto-generated reference for the `walkman` package, organized by module.
    :recursive:
 
    walkman.backend
-   walkman.noise
    walkman.plots
    walkman.instruments
    walkman.cli
