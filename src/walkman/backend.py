@@ -9,8 +9,7 @@ from typing import Literal, Optional
 import json
 
 from eregion.tasks.imagegen import ImageCreator
-
-from walkman.noise import NoisePSD, NoiseResult
+from eregion.tasks.noise import NoisePSD, NoiseResult
 
 
 def build_image_creator(instrument_module: ModuleType, config_path: str | Path, **kwargs) -> ImageCreator:
