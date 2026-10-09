@@ -14,7 +14,7 @@ authors = [{ name = "Yashvi-Sharma", email = "yssharma@caltech.edu" },
 license = { text = "MIT" }
 
 dependencies = [
-    "eregion @ git+https://github.com/CaltechOpticalObservatories/eregion.git@kpf-config",
+    "eregion @ git+https://github.com/CaltechOpticalObservatories/eregion.git@main",
     "notebook",
     "ipywidgets",
     "ipympl",
