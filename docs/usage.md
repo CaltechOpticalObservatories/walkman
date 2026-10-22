@@ -23,6 +23,7 @@ Instrument names are case-sensitive. The instruments available now are:
 |------------|------------------|---------|
 | `KPF`      | `kpf.yaml`: green and red CCDs with 2 outputs each, Ca H&K CCD with 1 output | `kpf.yaml` |
 | `DEIMOS`   | 8 CCDs with 2 outputs each, one FITS file per CCD. `deimos_long_oscan.yaml`: 200-pixel serial overscan. `deimos_sci.yaml`: 20-pixel serial overscan. | `deimos_long_oscan.yaml` |
+| `SYNTHETIC`| `synthetic.yaml`: 5 simulated 1024×1024 detectors of pure white noise with 1 output each, see [Synthetic example](#synthetic-example). | `synthetic.yaml` |
 
 `walkman start` options:
 
@@ -30,7 +31,7 @@ Instrument names are case-sensitive. The instruments available now are:
 |-------------------|-----------------------------------------------------------------------------------------------|
 | `-c`, `--config`  | Detector config to use instead of the instrument's default, e.g. `-c deimos_sci.yaml`.        |
 | `-o`, `--output`  | Folder the dashboard's **Output folder** field starts with. Default `~/walkman_results/<instrument>`. |
-| `-n`, `--notebook`| Dashboard to open. Default `basic.ipynb`, the dashboard described on this page.               |
+| `-n`, `--notebook`| Dashboard to open. Default `basic.ipynb`, the dashboard described on this page. Use `history.ipynb` to [browse previous runs](#browse-previous-runs). |
 
 For example, to analyze DEIMOS science-array data and keep the results on a data disk:
 
@@ -108,8 +109,33 @@ The **PSD** plot shows how the noise power is spread over frequency, from 0 to 0
 image. Purely random (white) noise gives a flat PSD. Peaks point to periodic noise, such as electrical pickup: a peak
 at frequency *f* is a pattern that repeats every 1/*f* pixels.
 
+The right axis of the PSD plot shows the same curve multiplied by ENBW / N. Here N is the PSD segment length
+(**Target shape**) and ENBW is the window's equivalent noise bandwidth in frequency bins (about 1.36 for `hamming`,
+1 for `boxcar`). Read on this axis, the height of a narrow spike above the flat baseline is the rms² of the signal
+causing it, in image units squared. For a sine the amplitude is √(2 × rms²); multiply by the readout chain's µV/ADU
+to get a voltage. This is a quick estimate: a spike whose frequency falls between two bins reads up to about a third
+low in rms². Hover over **ⓘ PSD axes** under the plot for a summary of this, including the current N, window and
+ENBW.
+
 Untick the checkbox in the **PSD** column to hide that row from the PSD and noise trend plots. This makes it easier
 to compare a few outputs at a time.
+
+### Synthetic example
+
+The `SYNTHETIC` instrument shows how the PSD level relates to the noise. Generate its images, one file per detector,
+each pure Gaussian white noise with a known standard deviation σ of 1, 2, 3, 4 and 5 ADU and a different bias
+offset:
+
+```bash
+python -m walkman.instruments.SYNTHETIC.make_data      # writes data/synthetic/SYN_det*_bias.fits
+walkman start SYNTHETIC
+```
+
+Analyze `data/synthetic`. The noise table shows the injected σ values, and each PSD is flat at 2σ², that is at 2, 8,
+18, 32 and 50. The power of white noise is spread evenly from 0 to 0.5 cycles/pixel, and the area under the PSD
+equals the variance σ², so the level is σ² / 0.5 = 2σ². The bias offset makes no difference because the mean is
+removed before the PSD is computed. So when the flat part of the PSD differs between outputs, their noise differs:
+doubling the noise raises the PSD level 4 times.
 
 ### Noise over time
 
@@ -141,7 +167,8 @@ gaps.
 ### Working with the plots
 
 Hover over a plot to show its toolbar, with tools to pan, zoom and save the plot as a PNG. Drag the triangle in the
-bottom-right corner of a plot to resize it.
+bottom-right corner of a plot to resize it. Untick **Log scale** under the PSD plot to switch its y axis (and the rms²
+axis) to a linear scale.
 
 ## Watch for new images
 
@@ -195,6 +222,19 @@ The table has these columns:
 | `histogram`                | `(bin_edges, counts)` arrays of the histogram. |
 
 To load a single image's results instead, use `NoiseResult.load` with that image's folder.
+
+## Browse previous runs
+
+To look at a saved run again in the dashboard, start the run history dashboard:
+
+```bash
+walkman start KPF -n history.ipynb
+```
+
+It lists the runs in the **Output folder**, newest first. Change the folder and click **Refresh** to list the runs
+somewhere else. Selecting a run shows the settings it was run with. Click **Load** to show its results in the same
+noise table, PSD, noise trend and histogram plots as the main dashboard. As at the end of a run, the noise table, PSD
+and histograms show the run's most recent image, and the noise trend shows every image in the run.
 
 ## Close the dashboard
 
