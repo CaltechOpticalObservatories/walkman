@@ -1,0 +1,15 @@
+{
+  "instrument": "SYNTHETIC",
+  "config_path": "/Users/yashvi/Desktop/Detector Characterization Tools/walkman/src/walkman/instruments/SYNTHETIC/synthetic.yaml",
+  "input_paths": "/Users/yashvi/Desktop/Detector Characterization Tools/walkman/data/synthetic/whitenoise_sine",
+  "regions": [
+    "full"
+  ],
+  "trim_start": 0,
+  "trim_end": 0,
+  "target_shape": null,
+  "window_func": "hamming",
+  "watch": false,
+  "poll_interval": 5.0,
+  "settle_time": 2.0
+}

@@ -1,0 +1,15 @@
+{
+  "instrument": "KPF",
+  "config_path": "/Users/yashvi/Desktop/Detector Characterization Tools/walkman/src/walkman/instruments/KPF/kpf.yaml",
+  "input_paths": "/Users/yashvi/Desktop/Detector Characterization Tools/walkman/data/KPF/cds/KP.20250219.59086.42.fits.fz",
+  "regions": [
+    "overscan"
+  ],
+  "trim_start": 0,
+  "trim_end": 0,
+  "target_shape": null,
+  "window_func": "hamming",
+  "watch": false,
+  "poll_interval": 5.0,
+  "settle_time": 2.0
+}
