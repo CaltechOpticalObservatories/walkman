@@ -79,28 +79,31 @@ objects:
       flip_x: false
       flip_y: false
 
-  - name: 'cahk'
-    class: DetImage
-    header_index: 0
-    filename_format: '*.fits*'
-    properties:
-      x_size: 1024
-      y_size: 255
-      pixel_size: 0.026  # mm
-    outputs:
-      - id: 'amp1'
-        ext_id: 5 # FITS extension ID
-        ext_slice: [!slice [0, 255], !slice [0, 1024]]
-        data_slice: [!slice [0, 255], !slice [0, 1024]]
-        serial_prescan: !slice [0, 0]
-        serial_overscan: !slice [1023, 1023]
-        parallel_prescan: !slice [0, 0]
-        parallel_overscan: !slice [254, 254]
-        readout_pixel: [0, 0]
-        parallel_axis: 'y'
-    focal_plane_position:
-      x_cen: 0.0  # mm
-      y_cen: 0.0  # mm
-      angle: 0.0  # degrees
-      flip_x: false
-      flip_y: false
+  # The Ca H&K CCD is an Andor DU920P read full-frame (WINDOW = '1 1024 1 255'), so it has no overscan.
+  # ScanSubtraction raises on an empty scan region, so cahk is excluded from the pipeline for now.
+  # Re-enable once walkman can run a detector that needs no overscan subtraction.
+  # - name: 'cahk'
+  #   class: DetImage
+  #   header_index: 0
+  #   filename_format: '*.fits*'
+  #   properties:
+  #     x_size: 1024
+  #     y_size: 255
+  #     pixel_size: 0.026  # mm
+  #   outputs:
+  #     - id: 'amp1'
+  #       ext_id: 5 # FITS extension ID
+  #       ext_slice: [!slice [0, 255], !slice [0, 1024]]
+  #       data_slice: [!slice [0, 255], !slice [0, 1024]]
+  #       serial_prescan: !slice [0, 0]  # no prescan
+  #       serial_overscan: !slice [1024, 1024]  # no overscan, full frame is image area
+  #       parallel_prescan: !slice [0, 0]  # no prescan
+  #       parallel_overscan: !slice [255, 255]  # no overscan, full frame is image area
+  #       readout_pixel: [0, 0]
+  #       parallel_axis: 'y'
+  #   focal_plane_position:
+  #     x_cen: 0.0  # mm
+  #     y_cen: 0.0  # mm
+  #     angle: 0.0  # degrees
+  #     flip_x: false
+  #     flip_y: false
