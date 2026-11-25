@@ -4,17 +4,25 @@ Interactive plots for the walkman dashboard, rendered with ipympl.
 Each plot owns one figure whose artists are updated in place, so plots can be refreshed from a background thread
 while keeping widget identity. Run `%matplotlib widget` in the notebook before creating plots.
 """
-from collections.abc import Hashable
+from collections.abc import Callable, Hashable
 from html import escape
+from typing import Literal
 
+import ipywidgets as widgets
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.ticker import MaxNLocator
 import numpy as np
+import pandas as pd
+from scipy.signal import get_window
 
 SURFACE = "#fcfcfb"
 GRID = "#e3e2de"
+TEXT_PRIMARY = "#1f1e1c"
 TEXT_SECONDARY = "#52514e"
+# font sizes of axis labels (and histogram titles) and of tick labels in all plots
+LABEL_SIZE = 11
+TICK_SIZE = 10
 # categorical hues, assigned in this fixed order
 CATEGORICAL = ("#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948")
 
@@ -57,6 +65,46 @@ def noise_value_html(noise: float, color: str) -> str:
             f"{noise:.3g}</div>")
 
 
+def psd_info_html(nperseg: int | None, window: str | Callable | None, enbw: float | None) -> str:
+    """
+    Render the PSD info icon, which reveals an explanation of the PSD plot's axes while hovered.
+
+    :param nperseg: PSD segment length N, or None before the first PSD.
+    :param window: Window function of the PSD, or None before the first PSD.
+    :param enbw: Equivalent noise bandwidth of the window in bins, or None if unknown.
+    :return: HTML string, with a scoped style block for the hover behavior.
+    """
+    if nperseg is None:
+        current = ""
+    else:
+        name = escape(window if isinstance(window, str) else getattr(window, "__name__", repr(window)))
+        current = (f"<p><b>Current:</b> N = {nperseg}, {name} window, "
+                   + (f"ENBW = {enbw:.3g} bins, so rms² = PSD / {nperseg / enbw:.4g}.</p>" if enbw else
+                      "ENBW unknown for this window, so the right axis is hidden.</p>"))
+    # the box is revealed in the page flow rather than as a popup, since widget boxes clip overflowing content
+    return f"""<style>
+.walkman-psd-info {{color: {TEXT_PRIMARY}; font-size: 13px; line-height: 1.4}}
+.walkman-psd-info-icon {{cursor: help; font-weight: 700; color: {TEXT_SECONDARY}}}
+.walkman-psd-info-box {{display: none; max-width: 560px; margin-top: 4px; padding: 8px 12px;
+                        background: {SURFACE}; border: 1px solid {GRID}; border-radius: 6px}}
+.walkman-psd-info:hover .walkman-psd-info-box {{display: block}}
+.walkman-psd-info-box p {{margin: 4px 0}}
+</style>
+<div class="walkman-psd-info">
+<span class="walkman-psd-info-icon">ⓘ PSD axes</span>
+<div class="walkman-psd-info-box">
+<p><b>Left axis:</b> power spectral density, in (image units)² per cycles/pixel. White noise is flat at
+<b>2σ²</b>, where σ is the Noise value in the table.</p>
+<p><b>Right axis:</b> PSD × ENBW / N, where N is the PSD segment length and ENBW the window's equivalent noise
+bandwidth. On this axis, the height of a narrow spike above the baseline is the <b>rms²</b> of the signal causing it.
+For a sine, amplitude ≈ √(2 rms²); multiply by the readout chain's µV/ADU for a voltage.</p>
+{current}
+<p><b>Caveats:</b> a spike between two frequency bins reads up to ⅓ low. Pickup in the overscan can split into
+sidebands, because the PSD joins the region's rows end to end; add up their rms² in that case.</p>
+</div>
+</div>"""
+
+
 def _style_axes(ax: Axes, xlabel: str | None, ylabel: str | None) -> None:
     ax.set_facecolor(SURFACE)
     ax.grid(True, color=GRID, linewidth=1)
@@ -65,11 +113,23 @@ def _style_axes(ax: Axes, xlabel: str | None, ylabel: str | None) -> None:
         ax.spines[side].set_visible(False)
     for side in ("left", "bottom"):
         ax.spines[side].set_color(GRID)
-    ax.tick_params(colors=TEXT_SECONDARY, labelsize=9)
+    ax.tick_params(colors=TEXT_PRIMARY, labelsize=TICK_SIZE)
     if xlabel:
-        ax.set_xlabel(xlabel, color=TEXT_SECONDARY, fontsize=9)
+        ax.set_xlabel(xlabel, color=TEXT_PRIMARY, fontsize=LABEL_SIZE)
     if ylabel:
-        ax.set_ylabel(ylabel, color=TEXT_SECONDARY, fontsize=9)
+        ax.set_ylabel(ylabel, color=TEXT_PRIMARY, fontsize=LABEL_SIZE)
+
+
+def window_enbw(window: str | Callable, nperseg: int) -> float:
+    """
+    Equivalent noise bandwidth of a PSD window, in frequency bins: nperseg * sum(w²) / sum(w)².
+
+    :param window: Window name accepted by `scipy.signal.get_window`, or a callable returning the window for a length.
+    :param nperseg: PSD segment length.
+    :return: ENBW in bins, e.g. 1.0 for boxcar and about 1.36 for hamming.
+    """
+    w = np.asarray(window(nperseg) if callable(window) else get_window(window, nperseg), dtype=float)
+    return nperseg * np.sum(w ** 2) / np.sum(w) ** 2
 
 
 def _check_pair(x: np.ndarray, y: np.ndarray, x_extra: int, names: str) -> tuple[np.ndarray, np.ndarray]:
@@ -153,6 +213,9 @@ class _SeriesPlot(_Figure):
 class PSDPlot(_SeriesPlot):
     """
     One-sided PSDs of several series on a log scale against frequency, over 0 to 0.5 cycles/pixel.
+
+    The right axis shows PSD * ENBW / N, the rms² of a narrow spike of that height above the base level, where N is
+    the PSD segment length and ENBW the window's equivalent noise bandwidth in bins. For a sine, amplitude = √2 * rms.
     """
     #: The x axis keeps its fixed 0 to 0.5 cycles/pixel range when rescaling.
     scalex = False
@@ -161,18 +224,53 @@ class PSDPlot(_SeriesPlot):
         super().__init__(figsize, xlabel="Frequency (cycles/pixel)", ylabel="PSD")
         self.ax.set_yscale("log")
         self.ax.set_xlim(0, 0.5)
+        # ENBW / N, set by update. The axis functions read it at draw time, so the right ticks follow it.
+        self.rms_factor = 1.0
+        self.rms_axis = self.ax.secondary_yaxis(
+            "right", functions=(lambda p: p * self.rms_factor, lambda r: r / self.rms_factor))
+        self.rms_axis.tick_params(colors=TEXT_PRIMARY, labelsize=TICK_SIZE)
+        self.rms_axis.spines["right"].set_color(GRID)
+        self.rms_axis.set_ylabel("PSD × ENBW / N (rms²)", color=TEXT_PRIMARY, fontsize=LABEL_SIZE)
+        self.rms_axis.set_visible(False)
+        # PSD segment length, window and its ENBW of the last update, None until known (enbw None for a bad window)
+        self.nperseg: int | None = None
+        self.window: str | Callable | None = None
+        self.enbw: float | None = None
 
-    def update(self, series: dict[Hashable, tuple[str, np.ndarray, np.ndarray]]) -> None:
+    def update(self, series: dict[Hashable, tuple[str, np.ndarray, np.ndarray]],
+               window: str | Callable = "hamming") -> None:
         """
         Add or refresh lines, one per series key.
 
         :param series: Mapping of key to (color, freqs, psd). freqs are in cycles/pixel, same length as psd.
+        :param window: Window function the PSDs were computed with, for the ENBW of the right axis. If it is not a
+            valid window, the right axis is hidden.
         """
         checked = {key: (color, *_check_pair(freqs, psd, 0, "freqs and psd"))
                    for key, (color, freqs, psd) in series.items()}
         for key, (color, freqs, psd) in checked.items():
             self._set_series(key, freqs, psd, color=color, linewidth=2,
                              solid_joinstyle="round", solid_capstyle="round")
+        if checked:
+            # one-sided PSD of an N-point segment has N // 2 + 1 frequencies, assuming N is even
+            self.nperseg = 2 * (len(next(iter(checked.values()))[1]) - 1)
+            self.window = window
+            try:
+                self.enbw = window_enbw(window, self.nperseg)
+                self.rms_factor = self.enbw / self.nperseg
+                self.rms_axis.set_visible(True)
+            except (ValueError, TypeError):
+                self.enbw = None
+                self.rms_axis.set_visible(False)
+        self._rescale()
+
+    def set_yscale(self, scale: Literal["log", "linear"]) -> None:
+        """
+        Switch the PSD axis between log and linear scale. The rms² axis follows.
+
+        :param scale: 'log' or 'linear'.
+        """
+        self.ax.set_yscale(scale)
         self._rescale()
 
 
@@ -230,13 +328,13 @@ class HistogramGrid(_Figure):
             self.steps = {}
             for ax, (key, (title, color, _, _)) in zip(axes, checked.items()):
                 _style_axes(ax, None, None)
-                ax.set_title(title, color=TEXT_SECONDARY, fontsize=9)
+                ax.set_title(title, color=TEXT_PRIMARY, fontsize=LABEL_SIZE)
                 ax.set_yscale("log")
                 ax.xaxis.set_major_locator(MaxNLocator(3))
                 ax.ticklabel_format(axis="x", useOffset=False)
                 self.steps[key] = ax.stairs([1], [0, 1], fill=True, color=color)
-            self.fig.supxlabel("Pixel value", color=TEXT_SECONDARY, fontsize=9)
-            self.fig.supylabel("Counts", color=TEXT_SECONDARY, fontsize=9)
+            self.fig.supxlabel("Pixel value", color=TEXT_PRIMARY, fontsize=LABEL_SIZE)
+            self.fig.supylabel("Counts", color=TEXT_PRIMARY, fontsize=LABEL_SIZE)
         for key, (_, _, edges, counts) in checked.items():
             step = self.steps[key]
             step.set_data(counts, edges)
@@ -251,3 +349,85 @@ class HistogramGrid(_Figure):
         self.fig.clear()
         self.steps = {}
         self.fig.canvas.draw_idle()
+
+
+class NoiseDashboard:
+    """
+    Noise table, combined PSD, noise trend and histogram grid for NoiseResult data, laid out as one widget.
+
+    Rows are keyed by (det_id, output, region) and colored in order of first appearance. The widget stays hidden until
+    the first update.
+    """
+    def __init__(self, time_label: str = "Time"):
+        """
+        :param time_label: x axis label of the noise trend plot.
+        """
+        self._rows = {}
+        self._table_header = [widgets.HTML(f"<b style='font-size:14px;color:{TEXT_SECONDARY}'>{name}</b>")
+                              for name in ("", "Noise", "PSD")]
+        self.noise_table = widgets.GridBox(self._table_header, layout=widgets.Layout(
+            width="50%", grid_template_columns="1fr auto auto", grid_gap="4px 16px", align_items="center",
+            max_height="400px", overflow_y="auto"))
+        self.psd_plot = PSDPlot()
+        self.trend_plot = NoiseTrendPlot(xlabel=time_label)
+        self.hist_grid = HistogramGrid()
+        self.psd_log = widgets.Checkbox(value=True, description="Log scale", indent=False,
+                                        tooltip="PSD y axis scale. Pressing 'l' on the focused plot also toggles it.")
+        self.psd_log.observe(lambda change: self.psd_plot.set_yscale("log" if change["new"] else "linear"),
+                             names="value")
+        self.psd_info = widgets.HTML(psd_info_html(None, None, None))
+        psd_box = widgets.VBox([self.psd_plot.widget, widgets.HBox([self.psd_log, self.psd_info],
+                                                                   layout=widgets.Layout(align_items="flex-start"))])
+        self.widget = widgets.VBox([widgets.HBox([self.noise_table, psd_box]), self.trend_plot.widget,
+                                    self.hist_grid.widget], layout=widgets.Layout(display="none"))
+
+    def _add_table_row(self, key: tuple, color: str) -> widgets.HTML:
+        noise_w = widgets.HTML()
+        show = widgets.Checkbox(value=True, indent=False, layout=widgets.Layout(width="auto"))
+
+        def _toggle(change):
+            self.psd_plot.set_visible(key, change["new"])
+            self.trend_plot.set_visible(key, change["new"])
+
+        show.observe(_toggle, names="value")
+        self.noise_table.children = (*self.noise_table.children, widgets.HTML(noise_label_html(*key, color)),
+                                     noise_w, show)
+        return noise_w
+
+    def update(self, latest: pd.DataFrame, history: pd.DataFrame, window: str | Callable = "hamming") -> None:
+        """
+        Refresh the dashboard and show it.
+
+        :param latest: NoiseResult data whose noise, PSD and histogram are shown. For repeated keys the last row wins.
+        :param history: NoiseResult data plotted in the noise trend, typically every image so far.
+        :param window: Window function the PSDs were computed with, for the rms² axis of the PSD plot.
+        """
+        for rec in latest.itertuples(index=False):
+            key = (rec.det_id, rec.output, rec.region)
+            if key not in self._rows:
+                # colors follow the row identity, so they stay fixed across refreshes
+                color = series_color(len(self._rows))
+                self._rows[key] = {"color": color, "noise_w": self._add_table_row(key, color)}
+            row = self._rows[key]
+            row.update(psd=rec.psd, histogram=rec.histogram)
+            row["noise_w"].value = noise_value_html(rec.noise, row["color"])
+        self.psd_plot.update({key: (row["color"], *row["psd"]) for key, row in self._rows.items()}, window=window)
+        self.psd_info.value = psd_info_html(self.psd_plot.nperseg, self.psd_plot.window, self.psd_plot.enbw)
+        self.trend_plot.update({key: (self._rows[key]["color"], group["time"].astype(float), group["noise"])
+                                for key, group in history.groupby(["det_id", "output", "region"], sort=False)
+                                if key in self._rows})
+        self.hist_grid.update({key: (" · ".join(map(str, key)), row["color"], *row["histogram"])
+                               for key, row in self._rows.items()})
+        self.widget.layout.display = None
+
+    def clear(self) -> None:
+        """
+        Remove all rows and series, and hide the dashboard.
+        """
+        self._rows.clear()
+        self.noise_table.children = self._table_header
+        self.psd_plot.clear()
+        self.trend_plot.clear()
+        self.hist_grid.clear()
+        self.psd_info.value = psd_info_html(None, None, None)
+        self.widget.layout.display = "none"

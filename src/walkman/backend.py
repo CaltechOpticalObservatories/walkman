@@ -9,7 +9,8 @@ from typing import Literal, Optional
 import json
 
 from eregion.tasks.imagegen import ImageCreator
-from eregion.tasks.noise import NoisePSD, NoiseResult
+from eregion.tasks.preprocessing import ScanSubtraction
+from eregion.tasks.noise import NOISE_FILENAME, NoisePSD, NoiseResult
 
 
 def build_image_creator(instrument_module: ModuleType, config_path: str | Path, **kwargs) -> ImageCreator:
@@ -48,6 +49,20 @@ def _new_run_dir(output_dir: Path) -> Path:
         except FileExistsError:
             continue
     raise FileExistsError(f"Could not create a new run folder for {stamp} in '{output_dir}'.")
+
+
+def list_runs(output_dir: str | Path) -> list[Path]:
+    """
+    List the run folders in an output folder that hold at least one saved NoiseResult, newest first.
+
+    :param output_dir: Folder in which `NoiseAnalysis.run` created its run folders.
+    :return: Run folders, sorted by name (their start timestamp) in reverse. Empty if `output_dir` does not exist.
+    """
+    output_dir = Path(output_dir).expanduser()
+    if not output_dir.is_dir():
+        return []
+    runs = [p for p in output_dir.iterdir() if p.is_dir() and any(p.glob(f"*/{NOISE_FILENAME}"))]
+    return sorted(runs, key=lambda p: p.name, reverse=True)
 
 
 class NoiseAnalysis:
@@ -131,10 +146,13 @@ class NoiseAnalysis:
         (self.run_dir / "run_config.json").write_text(json.dumps(run_config, indent=2))
 
         # max_batch_size=1, so each ImageResult holds the images built from a single file
+        oscansub = ScanSubtraction(which_scan="serial_overscan", method='median_by_axis', trim_start=trim_start, trim_end=trim_end)
         for index, imres in enumerate(self.creator.lazy_run(input_source=input_paths)):
             bundle = imres.data
             if len(bundle) == 0:
                 continue
+            res = oscansub.run(bundle)
+            bundle = res.data
             noiseres = self.task.run(bundle, regions=regions, trim_start=trim_start, trim_end=trim_end,
                                      target_shape=target_shape, window_func=window_func)
             if noiseres.data.empty:

@@ -1,0 +1,143 @@
+## Synthetic white noise detectors, see walkman.instruments.SYNTHETIC.make_data.
+## 5 detectors with 1 output each, one FITS file per detector. The whole array is Gaussian white noise, so the
+## prescan/overscan regions are only labels, they hold the same noise as the image area.
+---
+description: Synthetic white noise detectors, 5 detectors with one output each
+detector_type: CCD
+detector_output_class: CCDOutput
+
+objects:
+  - name: 'det_1'
+    class: DetImage
+    filename_format: 'SYN_det1_*.fits'
+    header_index: 0
+    properties:
+      x_size: 1024
+      y_size: 1024
+      pixel_size: 0.015  # mm
+    outputs:
+      - id: 'A'
+        ext_id: 1
+        ext_slice: [!slice [0, 1024], !slice [0, 1024]]
+        data_slice: [!slice [0, 1024], !slice [0, 1024]]
+        serial_prescan: !slice [0, 24]  # 24 pix
+        serial_overscan: !slice [924, 1024]  # 100 pix
+        parallel_prescan: !slice [0, 0]  # 0 pix
+        parallel_overscan: !slice [1000, 1024]  # 24 pix
+        parallel_axis: 'y'
+        readout_pixel: [0, 0]
+        gain: 1.0  # electrons/ADU
+    focal_plane_position:
+      x_cen: 0.0  # mm
+      y_cen: 0.0  # mm
+      angle: 0.0  # degrees
+      flip_x: false
+      flip_y: false
+
+  - name: 'det_2'
+    class: DetImage
+    filename_format: 'SYN_det2_*.fits'
+    header_index: 0
+    properties:
+      x_size: 1024
+      y_size: 1024
+      pixel_size: 0.015  # mm
+    outputs:
+      - id: 'A'
+        ext_id: 1
+        ext_slice: [!slice [0, 1024], !slice [0, 1024]]
+        data_slice: [!slice [0, 1024], !slice [0, 1024]]
+        serial_prescan: !slice [0, 24]  # 24 pix
+        serial_overscan: !slice [924, 1024]  # 100 pix
+        parallel_prescan: !slice [0, 0]  # 0 pix
+        parallel_overscan: !slice [1000, 1024]  # 24 pix
+        parallel_axis: 'y'
+        readout_pixel: [0, 0]
+        gain: 1.0  # electrons/ADU
+    focal_plane_position:
+      x_cen: 20.0  # mm
+      y_cen: 0.0  # mm
+      angle: 0.0  # degrees
+      flip_x: false
+      flip_y: false
+
+  - name: 'det_3'
+    class: DetImage
+    filename_format: 'SYN_det3_*.fits'
+    header_index: 0
+    properties:
+      x_size: 1024
+      y_size: 1024
+      pixel_size: 0.015  # mm
+    outputs:
+      - id: 'A'
+        ext_id: 1
+        ext_slice: [!slice [0, 1024], !slice [0, 1024]]
+        data_slice: [!slice [0, 1024], !slice [0, 1024]]
+        serial_prescan: !slice [0, 24]  # 24 pix
+        serial_overscan: !slice [924, 1024]  # 100 pix
+        parallel_prescan: !slice [0, 0]  # 0 pix
+        parallel_overscan: !slice [1000, 1024]  # 24 pix
+        parallel_axis: 'y'
+        readout_pixel: [0, 0]
+        gain: 1.0  # electrons/ADU
+    focal_plane_position:
+      x_cen: 40.0  # mm
+      y_cen: 0.0  # mm
+      angle: 0.0  # degrees
+      flip_x: false
+      flip_y: false
+
+  - name: 'det_4'
+    class: DetImage
+    filename_format: 'SYN_det4_*.fits'
+    header_index: 0
+    properties:
+      x_size: 1024
+      y_size: 1024
+      pixel_size: 0.015  # mm
+    outputs:
+      - id: 'A'
+        ext_id: 1
+        ext_slice: [!slice [0, 1024], !slice [0, 1024]]
+        data_slice: [!slice [0, 1024], !slice [0, 1024]]
+        serial_prescan: !slice [0, 24]  # 24 pix
+        serial_overscan: !slice [924, 1024]  # 100 pix
+        parallel_prescan: !slice [0, 0]  # 0 pix
+        parallel_overscan: !slice [1000, 1024]  # 24 pix
+        parallel_axis: 'y'
+        readout_pixel: [0, 0]
+        gain: 1.0  # electrons/ADU
+    focal_plane_position:
+      x_cen: 60.0  # mm
+      y_cen: 0.0  # mm
+      angle: 0.0  # degrees
+      flip_x: false
+      flip_y: false
+
+  - name: 'det_5'
+    class: DetImage
+    filename_format: 'SYN_det5_*.fits'
+    header_index: 0
+    properties:
+      x_size: 1024
+      y_size: 1024
+      pixel_size: 0.015  # mm
+    outputs:
+      - id: 'A'
+        ext_id: 1
+        ext_slice: [!slice [0, 1024], !slice [0, 1024]]
+        data_slice: [!slice [0, 1024], !slice [0, 1024]]
+        serial_prescan: !slice [0, 24]  # 24 pix
+        serial_overscan: !slice [924, 1024]  # 100 pix
+        parallel_prescan: !slice [0, 0]  # 0 pix
+        parallel_overscan: !slice [1000, 1024]  # 24 pix
+        parallel_axis: 'y'
+        readout_pixel: [0, 0]
+        gain: 1.0  # electrons/ADU
+    focal_plane_position:
+      x_cen: 80.0  # mm
+      y_cen: 0.0  # mm
+      angle: 0.0  # degrees
+      flip_x: false
+      flip_y: false

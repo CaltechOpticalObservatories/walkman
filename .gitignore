@@ -106,4 +106,4 @@ http-client.private.env.json
 # Generated plots from visualization tests (see tests/test_entropy_visualization.py)
 tests/output/
 
-data/
+data/DEIMOS/
